@@ -1,0 +1,89 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Create Android project
+        run: |
+          mkdir -p app/src/main/java/com/example/encodingapp
+          mkdir -p app/src/main
+
+          echo "pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }" > settings.gradle
+          echo "dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral() } }" >> settings.gradle
+          echo 'rootProject.name = "EncodingApp"' >> settings.gradle
+          echo 'include(":app")' >> settings.gradle
+
+          echo "plugins { id 'com.android.application' version '8.7.3' }" > app/build.gradle
+          echo "android { namespace 'com.example.encodingapp'; compileSdk 35; defaultConfig { applicationId 'com.example.encodingapp'; minSdk 23; targetSdk 28; versionCode 1; versionName '1.0' } }" >> app/build.gradle
+
+          echo '<manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:theme="@android:style/Theme.Material.Light.NoActionBar" android:label="编码查询"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity></application></manifest>' > app/src/main/AndroidManifest.xml
+
+          cat > app/src/main/java/com/example/encodingapp/MainActivity.java <<'EOF'
+          package com.example.encodingapp;
+          import android.app.Activity;
+          import android.os.Bundle;
+          import android.graphics.Color;
+          import android.view.Gravity;
+          import android.widget.*;
+          public class MainActivity extends Activity {
+            public void onCreate(Bundle b) {
+              super.onCreate(b);
+              LinearLayout l = new LinearLayout(this);
+              l.setOrientation(1);
+              l.setPadding(32,48,32,32);
+              l.setGravity(Gravity.CENTER_HORIZONTAL);
+              l.setBackgroundColor(Color.WHITE);
+              TextView title = new TextView(this);
+              title.setText("编码查询工具");
+              title.setTextSize(28);
+              l.addView(title);
+              EditText input = new EditText(this);
+              input.setHint("请输入产品编码");
+              l.addView(input);
+              Button btn = new Button(this);
+              btn.setText("查询");
+              l.addView(btn);
+              TextView result = new TextView(this);
+              result.setText("欢迎使用编码查询");
+              result.setTextSize(18);
+              l.addView(result);
+              btn.setOnClickListener(v -> result.setText("已输入编码：" + input.getText().toString()));
+              setContentView(l);
+            }
+          }
+          EOF
+
+      - name: Install Android SDK
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Build APK
+        run: gradle assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: EncodingApp-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
